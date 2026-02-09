@@ -7,6 +7,9 @@ import { setupMatchmaking } from './matchmaking';
 import { setupCasualMatchmaking } from './casual-matchmaking';
 import { setupChatWebSocket } from './chat-websocket';
 import { startScheduledActionsProcessor } from './scheduled-actions-processor';
+import { securityHeaders } from './middleware/security';
+import { requestId } from './middleware/requestId';
+import { AppError } from './errors';
 
 const app = express();
 const httpServer = createServer(app);
@@ -38,6 +41,9 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false }));
+
+app.use(requestId());
+app.use(securityHeaders());
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -84,12 +90,14 @@ app.use((req, res, next) => {
   startScheduledActionsProcessor();
   log("Scheduled actions processor started", "scheduler");
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
+  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
+    const status = err instanceof AppError ? err.statusCode : (err.status || err.statusCode || 500);
     const message = err.message || "Internal Server Error";
+    const code = err instanceof AppError ? err.code : undefined;
+    const reqId = (req as any).requestId;
 
-    res.status(status).json({ message });
-    throw err;
+    console.error(`[error] ${reqId || '-'} ${status}: ${message}`, err.stack || "");
+    res.status(status).json({ message, ...(code && { code }), ...(reqId && { requestId: reqId }) });
   });
 
   if (process.env.NODE_ENV === "production") {

@@ -4,6 +4,8 @@ import { eq, and, lte, ne } from "drizzle-orm";
 
 const POLL_INTERVAL = 60000;
 const SYSTEM_USER_ID = "system";
+const MAX_RETRIES = 3;
+const BASE_RETRY_DELAY_MS = 2 * 60 * 1000; // 2 minutes
 
 interface ActionData {
   type?: string;
@@ -220,12 +222,29 @@ async function processScheduledActions(): Promise<void> {
         console.log(`[Scheduled Actions] Executed action ${action.id} (${action.actionType})`);
       } catch (error: any) {
         const errorMessage = error?.message || String(error);
-        console.error(`[Scheduled Actions] Failed to execute action ${action.id}:`, errorMessage);
-        await db.update(scheduledShopActions).set({
-          status: "failed",
-          errorMessage: errorMessage.slice(0, 500),
-          retryCount: (action.retryCount || 0) + 1,
-        }).where(eq(scheduledShopActions.id, action.id));
+        const currentRetry = (action.retryCount || 0) + 1;
+
+        if (currentRetry < MAX_RETRIES) {
+          const delayMs = BASE_RETRY_DELAY_MS * Math.pow(2, currentRetry - 1);
+          const nextAttempt = new Date(Date.now() + delayMs);
+
+          await db.update(scheduledShopActions).set({
+            status: "pending",
+            scheduledAt: nextAttempt,
+            errorMessage: errorMessage.slice(0, 500),
+            retryCount: currentRetry,
+          }).where(eq(scheduledShopActions.id, action.id));
+
+          console.warn(`[Scheduled Actions] Action ${action.id} failed (attempt ${currentRetry}/${MAX_RETRIES}), retrying at ${nextAttempt.toISOString()}: ${errorMessage}`);
+        } else {
+          await db.update(scheduledShopActions).set({
+            status: "failed",
+            errorMessage: `Permanent failure after ${MAX_RETRIES} attempts: ${errorMessage}`.slice(0, 500),
+            retryCount: currentRetry,
+          }).where(eq(scheduledShopActions.id, action.id));
+
+          console.error(`[Scheduled Actions] Action ${action.id} permanently failed after ${MAX_RETRIES} attempts: ${errorMessage}`);
+        }
       }
     }
   } catch (error) {

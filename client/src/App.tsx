@@ -6,8 +6,9 @@ import { useEffect } from "react";
 import { GlobalBackground } from "@/components/GlobalBackground";
 import { FloatingSidebar } from "@/components/FloatingSidebar";
 import { SidebarProvider } from "@/contexts/SidebarContext";
-import { NavigationProvider, useNavigation, PageType } from "@/contexts/NavigationContext";
+import { NavigationProvider, useNavigation, PageType, PROTECTED_PAGES } from "@/contexts/NavigationContext";
 import { GameProvider } from "@/contexts/GameContext";
+import { useAuth } from "@/hooks/use-auth";
 
 import Landing from "@/pages/Landing";
 import Game from "@/pages/Game";
@@ -36,6 +37,31 @@ import MyStatistics from "@/pages/MyStatistics";
 import RankedGuide from "@/pages/RankedGuide";
 import Admin from "@/pages/Admin";
 import NotFound from "@/pages/not-found";
+
+function ProtectedPageGuard({ children }: { children: React.ReactNode }) {
+  const { currentPage, navigateTo } = useNavigation();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated && PROTECTED_PAGES.has(currentPage)) {
+      navigateTo('landing');
+    }
+  }, [isLoading, isAuthenticated, currentPage, navigateTo]);
+
+  if (PROTECTED_PAGES.has(currentPage) && isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (PROTECTED_PAGES.has(currentPage) && !isAuthenticated) {
+    return null;
+  }
+
+  return <>{children}</>;
+}
 
 function PageRenderer() {
   const { currentPage, params } = useNavigation();
@@ -75,7 +101,11 @@ function PageRenderer() {
     'not-found': <NotFound />,
   };
 
-  return <>{pageComponents[currentPage] || <NotFound />}</>;
+  return (
+    <ProtectedPageGuard>
+      {pageComponents[currentPage] || <NotFound />}
+    </ProtectedPageGuard>
+  );
 }
 
 function ThemeInitializer() {

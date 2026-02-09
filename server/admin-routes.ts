@@ -4,6 +4,7 @@ import { users, userProfiles, gameScores, playerProgression, rankedMatches, user
 import { broadcastNewMessage } from "./chat-sse";
 import { eq, desc, asc, sql, like, ilike, or, and, isNull, isNotNull } from "drizzle-orm";
 import { isAdmin, isSuperAdmin } from "./middleware/admin";
+import { isAuthenticated } from "./auth";
 import { createAuditLog } from "./middleware/audit";
 import { adminRateLimit, strictRateLimit } from "./middleware/rateLimit";
 import { z } from "zod";
@@ -20,7 +21,7 @@ const paginationSchema = z.object({
 });
 
 export function registerAdminRoutes(app: Express) {
-  app.get("/api/admin/check", adminRateLimit, async (req: any, res: Response) => {
+  app.get("/api/admin/check", isAuthenticated, adminRateLimit, async (req: any, res: Response) => {
     const userId = req.user?.claims?.sub;
     if (!userId) {
       return res.json({ isAdmin: false, role: null });

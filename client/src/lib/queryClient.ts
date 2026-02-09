@@ -1,8 +1,17 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
-import { supabase } from "./supabase";
+import { getCachedSession } from "./session-cache";
+
+// Stale time constants by category (ms)
+export const STALE_TIMES = {
+  auth: 5 * 60 * 1000,       // 5 min
+  userSettings: 10 * 60 * 1000, // 10 min
+  dynamic: 2 * 60 * 1000,     // 2 min (leaderboard, etc.)
+  catalog: 15 * 60 * 1000,    // 15 min (shop items, etc.)
+  admin: 1 * 60 * 1000,       // 1 min
+} as const;
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
-  const { data: { session } } = await supabase.auth.getSession();
+  const session = await getCachedSession();
   if (session?.access_token) {
     return { "Authorization": `Bearer ${session.access_token}` };
   }
@@ -62,7 +71,7 @@ export const queryClient = new QueryClient({
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      staleTime: Infinity,
+      staleTime: STALE_TIMES.auth,
       retry: false,
     },
     mutations: {

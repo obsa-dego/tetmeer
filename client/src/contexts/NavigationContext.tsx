@@ -56,6 +56,15 @@ interface NavigationContextType {
 
 const NavigationContext = createContext<NavigationContextType | null>(null);
 
+const MAX_HISTORY = 50;
+
+export const PROTECTED_PAGES = new Set<PageType>([
+  'account', 'settings', 'achievements', 'premium', 'shop',
+  'product-detail', 'social', 'notifications', 'payment-success',
+  'ranked', 'ranked-match', 'casual-lobby', 'casual-match',
+  'wild-match', 'test-match', 'my-ranking', 'my-statistics', 'admin',
+]);
+
 export function NavigationProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<NavigationState>({
     currentPage: 'landing',
@@ -64,11 +73,14 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
   });
 
   const navigateTo = useCallback((page: PageType, params: PageParams = {}) => {
-    setState((prev) => ({
-      currentPage: page,
-      params,
-      history: [...prev.history, { page: prev.currentPage, params: prev.params }],
-    }));
+    setState((prev) => {
+      const newHistory = [...prev.history, { page: prev.currentPage, params: prev.params }];
+      // Cap history to prevent memory leak
+      if (newHistory.length > MAX_HISTORY) {
+        newHistory.splice(0, newHistory.length - MAX_HISTORY);
+      }
+      return { currentPage: page, params, history: newHistory };
+    });
   }, []);
 
   const goBack = useCallback(() => {

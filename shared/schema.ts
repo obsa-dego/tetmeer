@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, integer, timestamp, boolean, index, serial } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { users } from "./models/auth";
 
 export * from "./models/auth";
 
@@ -19,7 +20,7 @@ export type GameDifficulty = typeof gameDifficultyEnum[number];
 
 export const gameScores = pgTable("game_scores", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id),
   score: integer("score").notNull(),
   level: integer("level").notNull(),
   linesCleared: integer("lines_cleared").notNull(),
@@ -103,7 +104,7 @@ export type TitleId = typeof titleIdEnum[number];
 
 export const userProfiles = pgTable("user_profiles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().unique(),
+  userId: varchar("user_id").notNull().unique().references(() => users.id),
   highScore: integer("high_score").default(0),
   totalGamesPlayed: integer("total_games_played").default(0),
   totalLinesCleared: integer("total_lines_cleared").default(0),
@@ -146,7 +147,7 @@ export type UserProfile = typeof userProfiles.$inferSelect;
 
 export const itemPurchases = pgTable("item_purchases", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id),
   itemType: varchar("item_type").notNull(),
   amount: integer("amount").notNull(),
   currency: varchar("currency").notNull(),
@@ -169,7 +170,7 @@ export type AcquisitionSource = typeof acquisitionSourceEnum[number];
 
 export const userInventory = pgTable("user_inventory", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id),
   itemType: varchar("item_type").notNull(),
   quantity: integer("quantity").notNull().default(0),
   purchasedAt: timestamp("purchased_at").defaultNow(),
@@ -207,7 +208,7 @@ export type RankDivision = typeof rankDivisionEnum[number];
 // Player progression table for level/XP and rank
 export const playerProgression = pgTable("player_progression", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().unique(),
+  userId: varchar("user_id").notNull().unique().references(() => users.id),
   
   // Level/XP system
   xp: integer("xp").notNull().default(0),
@@ -253,8 +254,8 @@ export const rankedMatches = pgTable("ranked_matches", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   
   // Players
-  playerAId: varchar("player_a_id").notNull(),
-  playerBId: varchar("player_b_id"), // null if AI opponent
+  playerAId: varchar("player_a_id").notNull().references(() => users.id),
+  playerBId: varchar("player_b_id").references(() => users.id), // null if AI opponent
   isAiOpponent: boolean("is_ai_opponent").notNull().default(false),
   aiDifficulty: varchar("ai_difficulty"), // easy, normal, hard, expert based on rank
   
@@ -299,8 +300,8 @@ export type RankedMatch = typeof rankedMatches.$inferSelect;
 // Direct Messages - Conversations
 export const conversations = pgTable("conversations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  participantAId: varchar("participant_a_id").notNull(),
-  participantBId: varchar("participant_b_id").notNull(),
+  participantAId: varchar("participant_a_id").notNull(), // No FK: OPERATOR_ID is not a real user
+  participantBId: varchar("participant_b_id").notNull(), // No FK: OPERATOR_ID is not a real user
   lastMessageAt: timestamp("last_message_at").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
@@ -319,8 +320,8 @@ export type Conversation = typeof conversations.$inferSelect;
 // Direct Messages - Messages
 export const messages = pgTable("messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  conversationId: varchar("conversation_id").notNull(),
-  senderId: varchar("sender_id").notNull(),
+  conversationId: varchar("conversation_id").notNull().references(() => conversations.id),
+  senderId: varchar("sender_id").notNull(), // No FK: OPERATOR_ID is not a real user
   content: text("content").notNull(),
   imageUrl: text("image_url"),
   isRead: boolean("is_read").default(false),
@@ -343,8 +344,8 @@ export type Message = typeof messages.$inferSelect;
 // Friend relationships
 export const friendships = pgTable("friendships", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull(),
-  friendId: varchar("friend_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  friendId: varchar("friend_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("friendships_user_id_idx").on(table.userId),
@@ -362,8 +363,8 @@ export type Friendship = typeof friendships.$inferSelect;
 // Block relationships
 export const blocks = pgTable("blocks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull(),
-  blockedId: varchar("blocked_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  blockedId: varchar("blocked_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("blocks_user_id_idx").on(table.userId),
@@ -381,7 +382,7 @@ export type Block = typeof blocks.$inferSelect;
 // Achievement system - tracks user achievement progress
 export const userAchievements = pgTable("user_achievements", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id),
   achievementId: varchar("achievement_id").notNull(),
   unlockedAt: timestamp("unlocked_at").defaultNow(),
   rewardClaimed: boolean("reward_claimed").default(false),
